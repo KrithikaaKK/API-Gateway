@@ -1,0 +1,134 @@
+server:
+  port: 8763
+
+management:
+  health:
+    circuitbreakers:
+      enabled: true
+  endpoints:
+    web:
+      exposure:
+        include: health #expose the endpoint to http
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    org.springframework.cloud.gateway.filter.rate limit.RedisRateLimiter: DEBUG
+    org.springframework.cloud.gateway.filter.ratelimit: DEBUG
+    org.springframework.data.redis.connection: DEBUG
+    org.springframework.data.redis.core: DEBUG
+    io.lettuce.core: DEBUG
+
+
+
+spring:
+  application:
+    name: API-GATEWAY
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      timeout: 2000ms
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
+
+
+  cloud:
+    gateway:
+      routes: # ← THIS WAS WRONG BEFORE!
+        - id: user-service
+          uri: lb://USER-SERVICE
+          predicates:
+            - Path=/user-service/**
+          filters:
+            - StripPrefix=1
+            # 1. Rate limiter FIRST → reject fast with 429 if over limit
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 1
+                redis-rate-limiter.burstCapacity: 3
+                redis-rate-limiter.requestedTokens: 2
+                key-resolver: "#{@userKeyResolver}"   # ← use key-resolver (hyphen), not keyResolver
+            # 2. CircuitBreaker SECOND → only runs if rate limit passed
+            - name: CircuitBreaker
+              args:
+                name: UserCircuitBreaker
+                fallbackUri: forward:/fallback/user
+
+        - id: product-service
+          uri: lb://PRODUCT-SERVICE
+          predicates:
+            - Path=/product-service/**
+          filters:
+            - StripPrefix=1
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 10
+                redis-rate-limiter.burstCapacity: 20
+                redis-rate-limiter.requestedTokens: 1
+                key-resolver: "#{@userKeyResolver}"   # ← hyphen here too!
+            - name: CircuitBreaker
+              args:
+                name: ProductCircuitBreaker
+                fallbackUri: forward:/fallback/product
+
+
+
+
+eureka:
+  client:
+#    service-url:
+#      defaultZone : http://localhost:8761/eureka/
+    fetch-registry: true
+  instance:
+    prefer-ip-address: true
+
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      UserCircuitBreaker:
+        registerHealthIndicator: true #to register CB as health indicator, can be viewed through endpoint of actuator
+        eventConsumerBufferSize: 10 # it's like logs to record the last 10 calls
+        failureRateThreshold: 50 # encounter with window
+        minimumNumberOfCalls: 5
+        automaticTransitionFromOpenToHalf: true
+        waitDurationInOpenState: 5s
+        permittedNumberOfCallsInHalfOpenState: 3
+        slidingWindowSize: 10
+        slidingWindowType: COUNT_BASED
+      ProductCircuitBreaker:
+          registerHealthIndicator: true #to register CB as health indicator, can be viewed through endpoint of actuator
+          eventConsumerBufferSize: 10
+          failureRateThreshold: 50
+          minimumNumberOfCalls: 5
+          automaticTransitionFromOpenToHalf: true
+          waitDurationInOpenState: 5s
+          permittedNumberOfCallsInHalfOpenState: 3
+          slidingWindowSize: 10
+          slidingWindowType: COUNT_BASED
+#  ratelimiter:
+#    user-service:
+#      registerHealthIndicator: false
+#      limit-for-period: 10
+#      limit-refresh-period: 10s
+#      timeout-duration: 0
+#    product-service:
+#      registerHealthIndicator: false
+#      limit-for-period: 10
+#      limit-refresh-period: 10s
+#      timeout-duration: 0
+
+
+
+
+
+
+
+
