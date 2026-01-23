@@ -1,3 +1,4 @@
+
 server:
   port: 8763
 
@@ -8,7 +9,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health #expose the endpoint to http
+        include: health,info,metrics,prometheus #expose the endpoint to http
   endpoint:
     health:
       show-details: always
@@ -41,6 +42,9 @@ spring:
 
   cloud:
     gateway:
+      locator:
+         enabled: true
+         lower-case-service-id: true
       routes:
         - id: user-service
           uri: lb://USER-SERVICE
@@ -83,8 +87,8 @@ spring:
 
 eureka:
   client:
-#    service-url:
-#      defaultZone : http://localhost:8761/eureka/
+    service-url:
+        defaultZone : http://discovery-service:8761/eureka/
     fetch-registry: true
   instance:
     prefer-ip-address: true
@@ -104,15 +108,15 @@ resilience4j:
         slidingWindowSize: 10
         slidingWindowType: COUNT_BASED
       ProductCircuitBreaker:
-          registerHealthIndicator: true #to register CB as health indicator, can be viewed through endpoint of actuator
-          eventConsumerBufferSize: 10
-          failureRateThreshold: 50
-          minimumNumberOfCalls: 5
-          automaticTransitionFromOpenToHalf: true
-          waitDurationInOpenState: 5s
-          permittedNumberOfCallsInHalfOpenState: 3
-          slidingWindowSize: 10
-          slidingWindowType: COUNT_BASED
+        registerHealthIndicator: true #to register CB as health indicator, can be viewed through endpoint of actuator
+        eventConsumerBufferSize: 10
+        failureRateThreshold: 50
+        minimumNumberOfCalls: 5
+        automaticTransitionFromOpenToHalf: true
+        waitDurationInOpenState: 5s
+        permittedNumberOfCallsInHalfOpenState: 3
+        slidingWindowSize: 10
+        slidingWindowType: COUNT_BASED
 #  ratelimiter:
 #    user-service:
 #      registerHealthIndicator: false
@@ -124,11 +128,3 @@ resilience4j:
 #      limit-for-period: 10
 #      limit-refresh-period: 10s
 #      timeout-duration: 0
-
-
-
-
-
-
-
-
